@@ -43,7 +43,7 @@ sessdefaults['timeout'] = 300.0
 sessdefaults['timeout_check_interval'] = 60.0
 sessdefaults['eckeypairfilename'] = None
 sessdefaults['megacache'] = True
-sessdefaults['torrent_collecting'] = True
+sessdefaults['torrent_collecting'] = False
 sessdefaults['dht_torrent_collecting'] = True
 sessdefaults['torrent_collecting_max_torrents'] = 50000
 sessdefaults['torrent_collecting_dir'] = None
@@ -57,9 +57,9 @@ sessdefaults['videoanalyserpath'] = None
 sessdefaults['peer_icon_path'] = None
 sessdefaults['family_filter'] = True
 sessdefaults['live_aux_seeders'] = []
-sessdefaults['mainline_dht'] = True
+sessdefaults['mainline_dht'] = False
 sessdefaults['mainline_dht_port'] = DEFAULTPORT - 3
-sessdefaults['libtorrent'] = True
+sessdefaults['libtorrent'] = False
 
 # SWIFTPROC config
 sessdefaults['swiftproc'] = True

@@ -451,13 +451,13 @@ class ABCApp():
             from Tribler.community.channel.preview import PreviewChannelCommunity
 
             # must be called on the Dispersy thread
-            dispersy.define_auto_load(SearchCommunity,
-                                     (s.dispersy_member,),
-                                     load=True)
-            dispersy.define_auto_load(AllChannelCommunity,
-                                           (s.dispersy_member,),
-                                           {"auto_join_channel": True} if sys.argv[0].endswith("dispersy-channel-booster.py") else {},
-                                           load=True)
+            # dispersy.define_auto_load(SearchCommunity,
+            #                          (s.dispersy_member,),
+            #                          load=True)
+            # dispersy.define_auto_load(AllChannelCommunity,
+            #                                (s.dispersy_member,),
+            #                                {"auto_join_channel": True} if sys.argv[0].endswith("dispersy-channel-booster.py") else {},
+            #                                load=True)
             if swift_process:
                 dispersy.define_auto_load(BarterCommunity,
                                           (swift_process,),
