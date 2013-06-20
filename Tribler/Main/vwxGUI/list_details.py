@@ -197,6 +197,8 @@ class TorrentDetails(AbstractDetails):
 
         else:
             def doGui(delayedResult):
+                if not self:
+                    return # C++ object already dead
                 requesttype = delayedResult.get()
                 if requesttype:
                     self.showRequestType('The torrentfile is requested %s.' % requesttype)
