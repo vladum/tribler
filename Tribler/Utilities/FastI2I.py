@@ -39,8 +39,10 @@ class FastI2IConnection(Thread):
         self.lock = Lock()
 
         self.start()
-        assert self.sock_connected.wait(60), 'Did not connect to socket within 60s.'
-
+        # TODO: wait() always returns None in Python 2.6
+        self.sock_connected.wait(60)
+        assert self.sock_connected.is_set(),'Did not connect to socket within 60s.'
+ 
     @attach_profiler
     def run(self):
 
