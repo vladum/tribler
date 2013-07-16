@@ -157,7 +157,7 @@ class TestAsServer(AbstractServer):
 
         print >> sys.stderr, "test_as_server: Session is shutdown"
 
-    def assert_(self, boolean, reason=None, doassert=True):
+    def assert_(self, boolean, reason=None, do_assert = True):
         if not boolean:
             self.quit()
             assert boolean, reason
@@ -185,7 +185,7 @@ class TestAsServer(AbstractServer):
                         self.Call(0.5, DoCheck)
                 else:
                     print >> sys.stderr, "test_as_server: quitting, condition was not satisfied in %d seconds (%s)" % (timeout, assertMsg or "no-assert-msg")
-                    self.assert_(False, assertMsg if assertMsg else "Condition was not satisfied in %d seconds" % timeout, doassert=False)
+                    self.assert_(False, assertMsg if assertMsg else "Condition was not satisfied in %d seconds" % timeout, do_assert=False)
         self.Call(0, DoCheck)
 
     def quit(self):
@@ -215,27 +215,35 @@ class TestGuiAsServer(TestAsServer):
         self.asserts = []
         self.annotate(self._testMethodName, start=True)
 
-    def assert_(self, boolean, reason, doassert=True):
+    def assert_(self, boolean, reason, do_assert = True):
         if not boolean:
             self.screenshot("ASSERT: %s" % reason)
             self.quit()
 
             self.asserts.append((boolean, reason))
-
-            if doassert:
+            
+            if do_assert:
                 assert boolean, reason
 
-    def startTest(self, callback):
+    def startTest(self, callback, min_timeout=5):
         from Tribler.Main.vwxGUI.GuiUtility import GUIUtility
         from Tribler.Main.tribler import run
 
         self.hadSession = False
+        starttime = time.time()
+
+        def call_callback():
+            took = time.time() - starttime
+            if took > min_timeout:
+                callback()
+            else:
+                self.Call(min_timeout - took, callback)
 
         def wait_for_frame():
             print >> sys.stderr, "tgs: GUIUtility ready, staring to wait for frame to be ready"
             self.frame = self.guiUtility.frame
             self.frame.Maximize()
-            self.CallConditional(30, lambda: self.frame.ready, callback)
+            self.CallConditional(30, lambda: self.frame.ready, call_callback)
 
         def wait_for_init():
             print >> sys.stderr, "tgs: lm initcomplete, staring to wait for GUIUtility to be ready"
@@ -280,7 +288,7 @@ class TestGuiAsServer(TestAsServer):
             self.frame.OnCloseWindow()
         else:
             def do_quit():
-                self.app.ExitMainLoop
+                self.app.ExitMainLoop()
                 wx.WakeUpMainThread()
 
             self.Call(1, do_quit)
@@ -297,7 +305,7 @@ class TestGuiAsServer(TestAsServer):
         del self.lm
         del self.session
 
-        time.sleep(10)
+        time.sleep(1)
         gc.collect()
 
         ts = enumerate_threads()
@@ -321,10 +329,14 @@ class TestGuiAsServer(TestAsServer):
         for boolean, reason in self.asserts:
             assert boolean, reason
 
-    def screenshot(self, title=None, destdir="output"):
-        app = wx.GetApp()
-        window = app.GetTopWindow()
-        rect = window.GetRect()
+    def screenshot(self, title=None, destdir="output", window=None):
+        if window == None:
+            app = wx.GetApp()
+            window = app.GetTopWindow()
+
+        rect = window.GetClientRect()
+        size = window.GetSize()
+        rect = wx.Rect(rect.x, rect.y, size.x, size.y)
 
         screen = wx.WindowDC(window)
         bmp = wx.EmptyBitmap(rect.GetWidth(), rect.GetHeight() + 30)

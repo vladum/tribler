@@ -401,6 +401,9 @@ class ABCApp():
 
         self.sconfig.set_install_dir(self.installdir)
 
+        # Boudewijn, 2013-06-17: Enable Dispersy tunnel (hard-coded)
+        self.sconfig.set_dispersy_tunnel_over_swift(True)
+
         # Arno, 2010-03-31: Hard upgrade to 50000 torrents collected
         self.sconfig.set_torrent_collecting_max_torrents(50000)
 
@@ -510,22 +513,27 @@ class ABCApp():
     def set_reputation(self):
         def do_db():
             nr_connections = 0
+            nr_channel_connections = 0
             if self.dispersy:
                 for community in self.dispersy.get_communities():
                     from Tribler.community.search.community import SearchCommunity
+                    from Tribler.community.allchannel.community import AllChannelCommunity
+
                     if isinstance(community, SearchCommunity):
                         nr_connections = community.get_nr_connections()
+                    elif isinstance(community, AllChannelCommunity):
+                        nr_channel_connections = community.get_nr_connections()
 
-            return nr_connections
+            return nr_connections, nr_channel_connections
 
         def do_wx(delayedResult):
-            nr_connections = delayedResult.get()
+            nr_connections, nr_channel_connections = delayedResult.get()
 
             # self.frame.SRstatusbar.set_reputation(myRep, total_down, total_up)
 
             # bitmap is 16px wide, -> but first and last pixel do not add anything.
             percentage = min(1.0, (nr_connections + 1) / 16.0)
-            self.frame.SRstatusbar.SetConnections(percentage, nr_connections)
+            self.frame.SRstatusbar.SetConnections(percentage, nr_connections, nr_channel_connections)
 
         """ set the reputation in the GUI"""
         if self.ready and self.frame.ready:
@@ -877,6 +885,7 @@ class ABCApp():
         delete_status_holders()
 
         if self.frame:
+            self.frame.Destroy()
             del self.frame
 
         # Don't checkpoint, interferes with current way of saving Preferences,
@@ -1068,7 +1077,10 @@ class ABCApp():
 #
 @attach_profiler
 def run(params=None):
-    logging.config.fileConfig("logger.conf")
+    try:
+        logging.config.fileConfig("logger.conf")
+    except:
+        logger.warning("Unable to load logging config from 'logger.conf' file.")
 
     if params is None:
         params = [""]

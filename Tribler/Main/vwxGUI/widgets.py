@@ -1153,6 +1153,7 @@ class ProgressBar(wx.Panel):
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
 
         self.completed = False
+        self.prev_blocks = None
 
     def OnEraseBackground(self, event):
         pass  # Or None
@@ -1181,6 +1182,11 @@ class ProgressBar(wx.Panel):
         dc.DrawRoundedRectangle(x, y, maxw, maxh, 2)
 
     def set_pieces(self, blocks):
+        if self.prev_blocks == blocks:
+            return
+        else:
+            self.prev_blocks = blocks
+
         maxBlocks = max(self.GetClientRect().width, 100)
         haveBlocks = len(blocks)
 
@@ -1222,6 +1228,7 @@ class ProgressBar(wx.Panel):
         self.blocks = blocks
 
     def setNormalPercentage(self, perc):
+        self.prev_blocks = None
         maxBlocks = max(self.GetClientRect().width, 100)
 
         sblocks = [2] * int(perc * maxBlocks)
@@ -1229,6 +1236,7 @@ class ProgressBar(wx.Panel):
         self.set_blocks(sblocks)
 
     def reset(self, colour=0):
+        self.prev_blocks = None
         sblocks = [colour] * 100
         self.set_blocks(sblocks)
 
@@ -1266,9 +1274,9 @@ class ActionButton(wx.Panel):
                 self.bitmaps = [bitmap]
                 self.bitmaps.append(wx.BitmapFromImage(image.AdjustChannels(1.0, 1.0, 1.0, 0.6)) if self.hover else bitmap)
                 self.bitmaps.append(wx.BitmapFromImage(image.ConvertToGreyscale().AdjustChannels(1.0, 1.0, 1.0, 0.3)))
-                self.Refresh()
             else:
                 self.bitmaps[0] = bitmap
+            self.Refresh()
 
     def GetBitmapHover(self):
         return self.bitmaps[1]
@@ -2568,8 +2576,8 @@ class VideoSlider(wx.Panel):
         if not self.dragging:
             slider_width = self.slider_range[1] - self.slider_range[0]
             self.slider_position[0] = (slider_width * self.value) + self.slider_range[0] if slider_width else self.slider_range[0]
-            self.slider_position[0] = max(self.slider_range[0], self.slider_position[0])
             self.slider_position[0] = min(self.slider_range[1], self.slider_position[0])
+            self.slider_position[0] = max(self.slider_range[0], self.slider_position[0])
             self.Refresh()
 
     def SetPieces(self, pieces):
