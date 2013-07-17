@@ -129,7 +129,7 @@ class TriblerLaunchMany(Thread):
 
                 self.dispersy.start()
 
-                print >> sys.stderr, "lmc: Dispersy is listening on port", self.dispersy.wan_address[1], "[%d]" % id(self.dispersy)
+                print >> sys.stderr, "lmc: Dispersy is listening on port", self.dispersy.wan_address[1], "using", endpoint
                 self.upnp_ports.append((self.dispersy.wan_address[1], 'UDP'))
 
                 self.dispersy.callback.call(self.dispersy.define_auto_load, args=(HardKilledCommunity,), kargs={'load': True})
@@ -504,7 +504,8 @@ class TriblerLaunchMany(Thread):
             dlconfig = pstate['dlconfig']
             if isinstance(dlconfig['saveas'], tuple):
                 dlconfig['saveas'] = dlconfig['saveas'][-1]
-            if 'name' in dlconfig and isinstance(dlconfig['name'], basestring) and sdef:
+
+            if sdef and 'name' in dlconfig and isinstance(dlconfig['name'], basestring):
                 sdef.set_name(dlconfig['name'])
             if sdef and sdef.get_tracker().startswith("127.0.0.1:"):
                 current_port = int(sdef.get_tracker().split(":")[1])
