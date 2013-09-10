@@ -53,10 +53,10 @@ class SwiftProcess:
         else:
             self.cmdport = cmdgwport
         # content web server
-        if httpgwport is None:
-            self.httpport = random.randint(12001, 12999)
-        else:
-            self.httpport = httpgwport
+        #if httpgwport is None:
+        #    self.httpport = random.randint(12001, 12999)
+        #else:
+        #    self.httpport = httpgwport
 
         # Security: only accept commands from localhost, enable HTTP gw,
         # no stats/webUI web server
@@ -71,8 +71,10 @@ class SwiftProcess:
         args.append("0.0.0.0:" + str(self.listenport))
         args.append("-c")  # command port
         args.append("127.0.0.1:" + str(self.cmdport))
-        args.append("-g")  # HTTP gateway port
-        args.append("127.0.0.1:" + str(self.httpport))
+        #args.append("-g")  # HTTP gateway port
+        #args.append("127.0.0.1:" + str(self.httpport))
+        args.append("--uprate")
+        args.append("256")
         args.append("-w")
         if zerostatedir is not None:
             if sys.platform == "win32":
@@ -87,7 +89,8 @@ class SwiftProcess:
                 args.append(zerostatedir)
             args.append("-T")  # zero state connection timeout
             args.append("180")  # seconds
-        # args.append("-B")  # Enable debugging on swift
+        #args.append("--debug")  # Enable debugging on swift
+        args.append("--progress") # Enable progress
 
         if DEBUG:
             print >> sys.stderr, "SwiftProcess: __init__: Running", args, "workdir", workdir
@@ -102,17 +105,21 @@ class SwiftProcess:
         # However, windows does not support non-files in the select command, hence we cannot integrate
         # these streams into the FastI2I thread
         # A proper solution would be to switch to twisted for the communication with the swift binary
+        print >> sys.stderr, args
         self.popen = subprocess.Popen(args, cwd=workdir, creationflags=creationflags, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        def read_and_print(socket):
+        def read_and_print(socket, type="err"):
+            o = sys.stderr
+            if type == "out":
+                o = sys.stdout
             prefix = currentThread().getName() + ":"
             while True:
                 line = socket.readline()
                 if not line:
-                    print >> sys.stderr, prefix, "readline returned nothing quitting"
+                    print >> o, prefix + " readline returned nothing quitting"
                     break
-                print >> sys.stderr, prefix, line.rstrip()
-        self.popen_outputthreads = [Thread(target=read_and_print, args=(self.popen.stdout,), name="SwiftProcess_%d_stdout" % self.listenport), Thread(target=read_and_print, args=(self.popen.stderr,), name="SwiftProcess_%d_stderr" % self.listenport)]
+                print >> o, prefix + " " + line.rstrip()
+        self.popen_outputthreads = [Thread(target=read_and_print, args=(self.popen.stdout,"out",), name="SwiftProcess_%d_stdout" % self.listenport), Thread(target=read_and_print, args=(self.popen.stderr,), name="SwiftProcess_%d_stderr" % self.listenport)]
         [thread.start() for thread in self.popen_outputthreads]
 
         self.roothash2dl = {}
