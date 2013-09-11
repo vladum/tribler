@@ -4,12 +4,8 @@
 # Meant to be called from mac/Makefile
 # ---------------
 
-import py2app
-from distutils.util import get_platform
 import sys
 import os
-import platform
-import shutil
 from setuptools import setup
 from Tribler.__init__ import LIBRARYNAME
 
@@ -125,7 +121,6 @@ setup(
              LIBRARYNAME + "/Main/Build/Mac/TriblerDoc.icns",
            ]
            # add images
-           + includedir(LIBRARYNAME + "/Video/Images")
            + includedir(LIBRARYNAME + "/Main/vwxGUI/images")
            + includedir(LIBRARYNAME + "/Main/webUI/static")
 

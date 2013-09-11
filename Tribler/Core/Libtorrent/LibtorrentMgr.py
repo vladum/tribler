@@ -14,6 +14,8 @@ from Tribler.Core import version_id
 from Tribler.Core.exceptions import DuplicateDownloadException
 from Tribler.Core import NoDispersyRLock
 from Tribler.Core.Utilities.utilities import parse_magnetlink
+from Tribler.Core.CacheDB.Notifier import Notifier
+from Tribler.Core.simpledefs import NTFY_MAGNET_STARTED, NTFY_TORRENTS, NTFY_MAGNET_CLOSE, NTFY_MAGNET_GOT_PEERS
 
 DEBUG = False
 DHTSTATE_FILENAME = "ltdht.state"
@@ -30,9 +32,11 @@ class LibtorrentMgr:
             LibtorrentMgr.__single = self
 
         self.trsession = trsession
+        self.notifier = Notifier.getInstance()
         settings = lt.session_settings()
         settings.user_agent = 'Tribler/' + version_id
-        fingerprint = ['TL'] + map(int, version_id.split('.')) + [0]
+        # Elric: Strip out the -rcX, -beta, -whatever tail on the version string.
+        fingerprint = ['TL'] + map(int, version_id.split('-')[0].split('.')) + [0]
         # Workaround for libtorrent 0.16.3 segfault (see https://code.google.com/p/libtorrent/issues/detail?id=369)
         self.ltsession = lt.session(lt.fingerprint(*fingerprint), flags=1)
         self.ltsession.set_settings(settings)
@@ -161,7 +165,7 @@ class LibtorrentMgr:
 
             if infohash in self.metainfo_requests:
                 print >> sys.stderr, "LibtorrentMgr: killing get_metainfo request for", infohash
-                handle, _ = self.metainfo_requests.pop(infohash)
+                handle, _, _ = self.metainfo_requests.pop(infohash)
                 if handle:
                     self.ltsession.remove_torrent(handle, 0)
 
@@ -252,12 +256,12 @@ class LibtorrentMgr:
     def get_peers(self, infohash, callback, timeout=30):
         def on_metainfo_retrieved(metainfo, infohash=infohash, callback=callback):
             callback(infohash, metainfo.get('initial peers', []))
-        self.get_metainfo(infohash, on_metainfo_retrieved, timeout)
+        self.get_metainfo(infohash, on_metainfo_retrieved, timeout, notify=False)
 
-    def get_metainfo(self, infohash_or_magnet, callback, timeout=30):
+    def get_metainfo(self, infohash_or_magnet, callback, timeout=30, notify=True):
         if not self.is_dht_ready() and timeout > 5:
             print >> sys.stderr, "LibtorrentDownloadImpl: DHT not ready, rescheduling get_metainfo"
-            self.trsession.lm.rawserver.add_task(lambda i=infohash_or_magnet, c=callback, t=timeout - 5: self.get_metainfo(i, c, t), 5)
+            self.trsession.lm.rawserver.add_task(lambda i=infohash_or_magnet, c=callback, t=timeout - 5, n=notify: self.get_metainfo(i, c, t, n), 5)
             return
 
         magnet = infohash_or_magnet if infohash_or_magnet.startswith('magnet') else None
@@ -285,11 +289,14 @@ class LibtorrentMgr:
                 else:
                     atp['info_hash'] = lt.big_number(infohash_bin)
                 handle = self.ltsession.add_torrent(atp)
+                if notify:
+                    self.notifier.notify(NTFY_TORRENTS, NTFY_MAGNET_STARTED, infohash_bin)
 
-                self.metainfo_requests[infohash] = (handle, [callback])
+                self.metainfo_requests[infohash] = [handle, [callback], notify]
                 self.trsession.lm.rawserver.add_task(lambda: self.got_metainfo(infohash, True), timeout)
 
             else:
+                self.metainfo_requests[infohash][2] = self.metainfo_requests[infohash][2] and notify
                 callbacks = self.metainfo_requests[infohash][1]
                 if callback not in callbacks:
                     callbacks.append(callback)
@@ -298,9 +305,10 @@ class LibtorrentMgr:
 
     def got_metainfo(self, infohash, timeout=False):
         with self.metainfo_lock:
+            infohash_bin = binascii.unhexlify(infohash)
 
             if infohash in self.metainfo_requests:
-                handle, callbacks = self.metainfo_requests.pop(infohash)
+                handle, callbacks, notify = self.metainfo_requests.pop(infohash)
 
                 if DEBUG:
                     print >> sys.stderr, 'LibtorrentMgr: got_metainfo', infohash, handle, timeout
@@ -317,6 +325,8 @@ class LibtorrentMgr:
                         metainfo["nodes"] = []
                     if peers:
                         metainfo["initial peers"] = peers
+                        if notify:
+                            self.notifier.notify(NTFY_TORRENTS, NTFY_MAGNET_GOT_PEERS, infohash_bin, len(peers))
 
                     self._add_cached_metainfo(infohash, metainfo)
 
@@ -328,6 +338,8 @@ class LibtorrentMgr:
 
                 if handle:
                     self.ltsession.remove_torrent(handle, 1)
+                    if notify:
+                        self.notifier.notify(NTFY_TORRENTS, NTFY_MAGNET_CLOSE, infohash_bin)
 
     def _clean_metainfo_cache(self):
         oldest_valid_ts = time.time() - METAINFO_CACHE_PERIOD

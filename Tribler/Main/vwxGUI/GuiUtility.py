@@ -14,8 +14,7 @@ from Tribler.__init__ import LIBRARYNAME
 
 from Tribler.Category.Category import Category
 from Tribler.Core.CacheDB.SqliteCacheDBHandler import UserEventLogDBHandler
-from Tribler.Core.Search.SearchManager import split_into_keywords, \
-    fts3_preprocess
+from Tribler.Core.Search.SearchManager import split_into_keywords, fts3_preprocess
 from Tribler.Main.Utility.GuiDBHandler import startWorker, GUI_PRI_DISPERSY
 from Tribler.Main.vwxGUI.SearchGridManager import TorrentManager, ChannelManager, LibraryManager
 from Tribler.Video.VideoPlayer import VideoPlayer
@@ -286,7 +285,8 @@ class GUIUtility:
         while self.frame.splitter_top.GetChildren():
             self.frame.splitter_top.Detach(0)
 
-        self.SetBottomSplitterWindow()
+        from Tribler.Main.vwxGUI.list_details import ChannelInfoPanel
+        self.SetBottomSplitterWindow(ChannelInfoPanel)
         if window:
             self.frame.splitter_top.Add(window, 1, wx.EXPAND)
             window.Show(show)
@@ -294,18 +294,32 @@ class GUIUtility:
         self.frame.splitter_top.Layout()
         self.frame.splitter_top_window.Refresh()
 
-    def SetBottomSplitterWindow(self, window=None, show=True):
-        self.frame.splitter_bottom.Clear(True)
-        if window:
-            self.frame.splitter_bottom.Add(window, 1, wx.EXPAND | wx.ALIGN_TOP | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-            self.frame.splitter_bottom_window.SetBackgroundColour(window.GetBackgroundColour())
-        else:
-            from __init__ import GRADIENT_LGREY
-            self.frame.splitter_bottom_window.SetBackgroundColour(GRADIENT_LGREY)
+    def SetBottomSplitterWindow(self, panel_type):
+        self.frame.splitter_bottom_window.Freeze()
+
+        from Tribler.Main.vwxGUI.list_details import TorrentDetails, ChannelInfoPanel, LibraryDetails, ChannelDetails, PlaylistDetails, SearchInfoPanel, LibraryInfoPanel, SelectedchannelInfoPanel, PlaylistInfoPanel
+
+        type_to_panel = {TorrentDetails.__name__: self.frame.torrentdetailspanel,
+                         LibraryDetails.__name__: self.frame.librarydetailspanel, \
+                         ChannelDetails.__name__: self.frame.channeldetailspanel, \
+                         PlaylistDetails.__name__: self.frame.playlistdetailspanel, \
+                         SearchInfoPanel.__name__: self.frame.searchinfopanel, \
+                         ChannelInfoPanel.__name__: self.frame.channelinfopanel, \
+                         LibraryInfoPanel.__name__: self.frame.libraryinfopanel, \
+                         PlaylistInfoPanel.__name__: self.frame.playlistinfopanel, \
+                         SelectedchannelInfoPanel.__name__: self.frame.selectedchannelinfopanel}
+
+        result = None
+        for pt, pl in type_to_panel.iteritems():
+            pl.Show(pt == panel_type.__name__)
+            if pt == panel_type.__name__:
+                result = pl
         if self.guiPage != 'mychannel':
-            self.frame.splitter.Show(show)
+            self.frame.splitter.Show(True)
         self.frame.splitter_bottom.Layout()
+        self.frame.splitter_bottom_window.Thaw()
         self.frame.splitter_bottom_window.Refresh()
+        return result
 
     def SetColumnInfo(self, itemtype, columns, hide_defaults=[]):
         fileconfig = wx.FileConfig(appName="Tribler", localFilename=os.path.join(self.frame.utility.session.get_state_dir(), "gui_settings"))
@@ -640,6 +654,60 @@ class GUIUtility:
                     wx.CallAfter(self.Notify, "Channel removed from favourites", "Removed channel '%s' from your favourites" % channel.name, icon='favourite')
                     if event:
                         button.Enable(True)
+                    self.RefreshChannel(channel.id)
+                remove_vote()
+            elif event:
+                button.Enable(True)
+
+    @forceWxThread
+    def MarkAsSpam(self, event, channel):
+        if channel:
+            if event:
+                button = event.GetEventObject()
+                button.Enable(False)
+                if hasattr(button, 'selected'): button.selected = False
+
+            dlgname = 'MSdialog'
+            if not self.ReadGuiSetting('show_%s' % dlgname, default=True):
+                response = wx.ID_OK
+            else:
+                from Tribler.Main.Dialogs.ConfirmationDialog import ConfirmationDialog
+                dlg = ConfirmationDialog(None, dlgname, "You are about to report channel \'%s\' as spam." % channel.name, "")
+                response = dlg.ShowModal()
+
+            if response == wx.ID_OK:
+                @forcePrioDBThread
+                def remove_vote():
+                    self.channelsearch_manager.spam(channel.id)
+                    wx.CallAfter(self.Notify, "Channel marked as spam", "Channel '%s' marked as spam" % channel.name)
+                    if event: button.Enable(True)
+                    self.RefreshChannel(channel.id)
+                remove_vote()
+            elif event:
+                button.Enable(True)
+
+    @forceWxThread
+    def RemoveSpam(self, event, channel):
+        if channel:
+            if event:
+                button = event.GetEventObject()
+                button.Enable(False)
+                if hasattr(button, 'selected'): button.selected = False
+
+            dlgname = 'RSdialog'
+            if not self.ReadGuiSetting('show_%s' % dlgname, default=True):
+                response = wx.ID_OK
+            else:
+                from Tribler.Main.Dialogs.ConfirmationDialog import ConfirmationDialog
+                dlg = ConfirmationDialog(None, dlgname, "You are about unmark channel \'%s\' as spam." % channel.name, "")
+                response = dlg.ShowModal()
+
+            if response == wx.ID_OK:
+                @forcePrioDBThread
+                def remove_vote():
+                    self.channelsearch_manager.remove_vote(channel.id)
+                    wx.CallAfter(self.Notify, "Channel unmarked as spam", "Channel '%s' unmarked as spam" % channel.name)
+                    if event: button.Enable(True)
                     self.RefreshChannel(channel.id)
                 remove_vote()
             elif event:

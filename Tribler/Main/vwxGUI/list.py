@@ -413,6 +413,8 @@ class ChannelSearchManager(BaseManager):
                 self.do_or_schedule_refresh()
 
             else:
+                update = False
+
                 if not votecast:
                     if self.category == 'All':
                         update = True
@@ -609,14 +611,13 @@ class List(wx.BoxSizer):
         wx.CallAfter(self.guiutility.frame.top_bg.TorrentsChanged)
 
     @warnWxThread
-    def OnCollapse(self, item, panel):
+    def OnCollapse(self, item, panel, from_expand):
         assert self.isReady, "List not ready"
 
-        self.OnCollapseInternal(item)
-        if panel:
-            panel.Destroy()
+        if not from_expand:
+            self.OnCollapseInternal(item)
 
-        wx.CallAfter(self.guiutility.frame.top_bg.TorrentsChanged)
+            wx.CallAfter(self.guiutility.frame.top_bg.TorrentsChanged)
 
     def OnCollapseInternal(self, item):
         pass
@@ -895,12 +896,6 @@ class SizeList(List):
         self.curMax = -1
         self.filteredMax = -1
         self.sizefilter = None
-
-    @warnWxThread
-    def OnCollapse(self, item, panel):
-        List.OnCollapse(self, item, panel)
-        if panel:
-            self.guiutility.SetBottomSplitterWindow(None)
 
     def OnFilter(self, keyword):
         new_filter = keyword.lower().strip()
@@ -1249,13 +1244,13 @@ class GenericSearchList(SizeList):
     def OnExpand(self, item):
         List.OnExpand(self, item)
         if isinstance(item.original_data, Torrent):
-            td = TorrentDetails(self.guiutility.frame.splitter_bottom_window, item.original_data)
-            item.expandedPanel = td
-            self.guiutility.SetBottomSplitterWindow(td)
+            detailspanel = self.guiutility.SetBottomSplitterWindow(TorrentDetails)
+            detailspanel.setTorrent(item.original_data)
+            item.expandedPanel = detailspanel
         elif isinstance(item.original_data, Channel):
-            cd = ChannelDetails(self.guiutility.frame.splitter_bottom_window, item.original_data)
-            item.expandedPanel = cd
-            self.guiutility.SetBottomSplitterWindow(cd)
+            detailspanel = self.guiutility.SetBottomSplitterWindow(ChannelDetails)
+            detailspanel.showChannel(item.original_data)
+            item.expandedPanel = detailspanel
         return True
 
     @warnWxThread
@@ -1267,10 +1262,8 @@ class GenericSearchList(SizeList):
         self.guiutility.frame.top_bg.ClearButtonHandlers()
 
     def ResetBottomWindow(self):
-        panel = SearchInfoPanel(self.guiutility.frame.splitter_bottom_window)
-        num_items = len(self.list.raw_data) if self.list.raw_data else 0
-        panel.Set(num_items)
-        self.guiutility.SetBottomSplitterWindow(panel)
+        detailspanel = self.guiutility.SetBottomSplitterWindow(SearchInfoPanel)
+        detailspanel.Set(len(self.list.raw_data) if self.list.raw_data else 0)
 
     @forceWxThread
     def StartDownload(self, torrent, files=None):
@@ -1772,10 +1765,9 @@ class LibraryList(SizeList):
 
     def OnExpand(self, item):
         List.OnExpand(self, item)
-        ld = LibraryDetails(self.guiutility.frame.splitter_bottom_window, item.original_data, self.bw_history.get(item.original_data.infohash, []))
-        item.expandedPanel = ld
-        self.guiutility.SetBottomSplitterWindow(ld)
-
+        detailspanel = self.guiutility.SetBottomSplitterWindow(LibraryDetails)
+        detailspanel.setTorrent(item.original_data, self.bw_history.get(item.original_data.infohash, []))
+        item.expandedPanel = detailspanel
         return True
 
     def OnCollapseInternal(self, item):
@@ -1786,10 +1778,8 @@ class LibraryList(SizeList):
         self.guiutility.frame.top_bg.ClearButtonHandlers()
 
     def ResetBottomWindow(self):
-        panel = LibraryInfoPanel(self.guiutility.frame.splitter_bottom_window)
-        num_items = len(self.list.raw_data) if self.list.raw_data else 0
-        panel.Set(num_items)
-        self.guiutility.SetBottomSplitterWindow(panel)
+        detailspanel = self.guiutility.SetBottomSplitterWindow(LibraryInfoPanel)
+        detailspanel.Set(len(self.list.raw_data) if self.list.raw_data else 0)
 
     def __ds__eq__(self, ds1, ds2):
         # Exact same objects or both None
@@ -2139,9 +2129,9 @@ class ChannelList(List):
 
     def OnExpand(self, item):
         List.OnExpand(self, item)
-        cd = ChannelDetails(self.guiutility.frame.splitter_bottom_window, item.original_data)
-        item.expandedPanel = cd
-        self.guiutility.SetBottomSplitterWindow(cd)
+        detailspanel = self.guiutility.SetBottomSplitterWindow(ChannelDetails)
+        detailspanel.showChannel(item.original_data)
+        item.expandedPanel = detailspanel
         return True
 
     def OnCollapseInternal(self, item):
@@ -2152,10 +2142,8 @@ class ChannelList(List):
         self.guiutility.frame.top_bg.ClearButtonHandlers()
 
     def ResetBottomWindow(self):
-        panel = ChannelInfoPanel(self.guiutility.frame.splitter_bottom_window)
-        num_items = len(self.list.raw_data) if self.list.raw_data else 1
-        panel.Set(num_items, self.GetManager().category == "Favorites")
-        self.guiutility.SetBottomSplitterWindow(panel)
+        detailspanel = self.guiutility.SetBottomSplitterWindow(ChannelInfoPanel)
+        detailspanel.Set(len(self.list.raw_data) if self.list.raw_data else 1, self.GetManager().category == "Favorites")
 
     def OnAdd(self, event):
         dlg = wx.TextEntryDialog(None, 'Please specify the channel-identifier.\nThis should be a 40 character string which can be found in the overview tab of the channel management interface.\n\nJoining a channel can take up to 1 minute and should appear in the all channellist.', 'Enter channel-identifier')
@@ -2331,11 +2319,13 @@ class ActivitiesList(List):
             self.guiutility.ShowPlayer()
         return True
 
-    def OnCollapse(self, item, panel):
+    def OnCollapse(self, item, panel, from_expand):
+        assert self.isReady, "List not ready"
+
         if panel == self.expandedPanel:
             panel = None
 
-        List.OnCollapse(self, item, panel)
+        self.OnCollapseInternal(item)
 
     def OnCollapseInternal(self, item):
         for child in item.GetChildren():
