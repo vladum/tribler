@@ -131,7 +131,12 @@ class BarterCommunity(Community):
 
     @classmethod
     def get_master_members(cls, dispersy):
-        return [dispersy.get_member(MASTER_MEMBER_PUBLIC_KEY)]
+        import os
+        bc3_master_file = os.path.join(os.environ["PROJECTROOT"], "tmp", "bc3_master")
+        with open(bc3_master_file, "r") as f:
+            master = f.read().split(" ")[0]
+        return [dispersy.get_member(master.decode("hex"))]
+        #return [dispersy.get_member(MASTER_MEMBER_PUBLIC_KEY)]
 
     @classmethod
     def load_community(cls, dispersy, master, *args, **kargs):
